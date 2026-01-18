@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 
 #include <opencv2/dnn.hpp>
@@ -19,7 +20,6 @@ cv::Mat Postprocessor::to2D(const cv::Mat& out) {
     const int rows = static_cast<int>(out.total() / last_dim);
     cv::Mat out2d = out.reshape(1, rows);
 
-    // Heuristic: if attributes axis is the first (small) dimension, transpose.
     if (out2d.rows < out2d.cols && out2d.rows <= 256) {
         out2d = out2d.t();
     }
@@ -40,110 +40,50 @@ cv::Rect2f Postprocessor::clipRect(const cv::Rect2f& r, const cv::Size& size) {
     return cv::Rect2f(x0, y0, x1 - x0, y1 - y0);
 }
 
-void Postprocessor::decodeOutput(
-    const cv::Mat& out2d,
-    const PreprocessResult& prep,
-    const cv::Size& orig_size,
-    std::vector<Detection>& candidates
-) const {
-    if (out2d.empty()) return;
-    if (out2d.cols < 5) return;
-
-    int num_classes = options_.num_classes;
-    bool has_obj = options_.has_objectness;
-
-    if (num_classes > 0) {
-        if (out2d.cols == 5 + num_classes) {
-            has_obj = true;
-        } else if (out2d.cols == 4 + num_classes) {
-            has_obj = false;
-        }
-    } else {
-        // Auto-detect class count using common YOLO layouts.
-        if (out2d.cols >= 6) {
-            num_classes = out2d.cols - (options_.has_objectness ? 5 : 4);
-        }
-    }
-
-    const int cls_start = has_obj ? 5 : 4;
-    const int cls_count = out2d.cols - cls_start;
-    if (cls_count <= 0) return;
-
-    const float input_w = static_cast<float>(prep.letterbox_bgr.cols);
-    const float input_h = static_cast<float>(prep.letterbox_bgr.rows);
-
-    for (int i = 0; i < out2d.rows; ++i) {
-        const float* data = out2d.ptr<float>(i);
-
-        float x = data[0];
-        float y = data[1];
-        float w = data[2];
-        float h = data[3];
-
-        const float max_coord = std::max(std::max(x, y), std::max(w, h));
-        if (max_coord <= 1.5f) {
-            x *= input_w;
-            y *= input_h;
-            w *= input_w;
-            h *= input_h;
-        }
-
-        int best_class = -1;
-        float best_score = 0.0f;
-        for (int c = 0; c < cls_count; ++c) {
-            const float score = data[cls_start + c];
-            if (score > best_score) {
-                best_score = score;
-                best_class = c;
-            }
-        }
-
-        float confidence = best_score;
-        if (has_obj) {
-            confidence *= data[4];
-        }
-
-        if (confidence < options_.conf_threshold) {
-            continue;
-        }
-
-        cv::Rect2f box;
-        if (options_.boxes_in_xywh) {
-            const float x0 = x - w * 0.5f;
-            const float y0 = y - h * 0.5f;
-            box = cv::Rect2f(x0, y0, w, h);
-        } else {
-            box = cv::Rect2f(x, y, w - x, h - y);
-        }
-
-        // Map from letterboxed input to original frame.
-        if (prep.scale > 0.0f) {
-            const float x0 = (box.x - prep.pad_x) / prep.scale;
-            const float y0 = (box.y - prep.pad_y) / prep.scale;
-            const float x1 = (box.x + box.width - prep.pad_x) / prep.scale;
-            const float y1 = (box.y + box.height - prep.pad_y) / prep.scale;
-            box = cv::Rect2f(x0, y0, x1 - x0, y1 - y0);
-        }
-
-        box = clipRect(box, orig_size);
-        if (box.width <= 0.0f || box.height <= 0.0f) {
-            continue;
-        }
-
-        candidates.push_back({box, confidence, best_class});
-    }
-}
-
 std::vector<Detection> Postprocessor::run(
     const std::vector<cv::Mat>& outs,
     const PreprocessResult& prep,
     const cv::Size& orig_size
-) {
+) const {
     std::vector<Detection> candidates;
 
     for (const auto& out : outs) {
         cv::Mat out2d = to2D(out);
-        decodeOutput(out2d, prep, orig_size, candidates);
+        if (out2d.empty() || out2d.cols < 6) {
+            continue;
+        }
+
+        for (int i = 0; i < out2d.rows; ++i) {
+            const float* data = out2d.ptr<float>(i);
+
+            float x1 = data[0];
+            float y1 = data[1];
+            float x2 = data[2];
+            float y2 = data[3];
+            const float conf = data[4];
+            const int class_id = static_cast<int>(data[5]);
+
+            if (conf < options_.conf_threshold) {
+                continue;
+            }
+
+            cv::Rect2f box(x1, y1, x2 - x1, y2 - y1);
+
+            if (prep.scale > 0.0f) {
+                const float bx0 = (box.x - prep.pad_x) / prep.scale;
+                const float by0 = (box.y - prep.pad_y) / prep.scale;
+                const float bx1 = (box.x + box.width - prep.pad_x) / prep.scale;
+                const float by1 = (box.y + box.height - prep.pad_y) / prep.scale;
+                box = cv::Rect2f(bx0, by0, bx1 - bx0, by1 - by0);
+            }
+
+            box = clipRect(box, orig_size);
+            if (box.width <= 0.0f || box.height <= 0.0f) {
+                continue;
+            }
+
+            candidates.push_back({box, conf, class_id});
+        }
     }
 
     if (candidates.empty()) {
@@ -177,11 +117,19 @@ void Postprocessor::setDebug(bool enabled, int every_n, const std::string& out_d
     debug_out_dir_ = out_dir;
 }
 
-void Postprocessor::maybeSaveDebug(const cv::Mat& frame, const std::vector<Detection>& dets) {
+void Postprocessor::maybeDebugFrame(const cv::Mat& frame, const std::vector<Detection>& dets) {
     ++frame_idx_;
     if (!debug_enabled_) return;
     if (frame.empty()) return;
     if ((frame_idx_ % static_cast<std::size_t>(debug_every_n_)) != 0) return;
+
+    std::cout << "detections: " << dets.size() << "\n";
+    for (const auto& det : dets) {
+        std::cout << "  class=" << det.class_id
+                  << " conf=" << det.confidence
+                  << " box=[" << det.box.x << "," << det.box.y
+                  << "," << det.box.width << "," << det.box.height << "]\n";
+    }
 
     std::filesystem::create_directories(debug_out_dir_);
 

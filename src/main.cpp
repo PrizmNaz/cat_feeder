@@ -45,10 +45,8 @@ int main() {
     // --- Runtime ---
     Perf perf;
     PostprocessOptions post_opts;
-    post_opts.num_classes = 26;
-    post_opts.conf_threshold = 0.8f;
+    post_opts.conf_threshold = 0.25f;
     post_opts.nms_threshold = 0.45f;
-    post_opts.has_objectness = false;
     Postprocessor post(post_opts);
     post.setDebug(true, 30, "output");
 
@@ -84,7 +82,7 @@ int main() {
         perf.onFrame(cap_ms, pre_ms, inf_ms, total_ms);
 
         std::vector<Detection> dets = post.run(outs, pr, frame.size());
-        post.maybeSaveDebug(frame, dets);
+        post.maybeDebugFrame(frame, dets);
 
         if (perf.shouldReport()) {
             std::cout
