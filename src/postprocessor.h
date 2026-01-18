@@ -1,5 +1,6 @@
 #pragma once
 #include <opencv2/opencv.hpp>
+#include <string>
 #include <vector>
 
 #include "preprocessor.h"
@@ -27,6 +28,7 @@ public:
 
     void setDebug(bool enabled, int every_n = 30, const std::string& out_dir = "output");
     void maybeDebugFrame(const cv::Mat& frame, const std::vector<Detection>& dets);
+    void drawDetections(cv::Mat& frame, const std::vector<Detection>& dets) const;
 
 private:
     PostprocessOptions options_;

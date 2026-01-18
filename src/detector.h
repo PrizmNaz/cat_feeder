@@ -13,4 +13,6 @@ public:
 private:
     std::string onnxPath_;
     cv::dnn::Net net_;
+    std::vector<std::string> output_names_;
+    bool loaded_ = false;
 };

@@ -16,9 +16,14 @@ cv::Mat Postprocessor::to2D(const cv::Mat& out) {
         return out;
     }
 
+    cv::Mat cont = out;
+    if (!out.isContinuous()) {
+        cont = out.clone();
+    }
+
     const int last_dim = out.size[out.dims - 1];
-    const int rows = static_cast<int>(out.total() / last_dim);
-    cv::Mat out2d = out.reshape(1, rows);
+    const int rows = static_cast<int>(cont.total() / last_dim);
+    cv::Mat out2d = cont.reshape(1, rows);
 
     if (out2d.rows < out2d.cols && out2d.rows <= 256) {
         out2d = out2d.t();
@@ -134,19 +139,23 @@ void Postprocessor::maybeDebugFrame(const cv::Mat& frame, const std::vector<Dete
     std::filesystem::create_directories(debug_out_dir_);
 
     cv::Mat vis = frame.clone();
-    for (const auto& det : dets) {
-        cv::rectangle(vis, det.box, cv::Scalar(0, 255, 0), 2);
-
-        std::ostringstream label;
-        label << det.class_id << " " << std::fixed << std::setprecision(2) << det.confidence;
-        cv::putText(
-            vis, label.str(),
-            cv::Point(static_cast<int>(det.box.x), std::max(0, static_cast<int>(det.box.y) - 4)),
-            cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1
-        );
-    }
+    drawDetections(vis, dets);
 
     std::ostringstream path;
     path << debug_out_dir_ << "/frame_" << std::setw(6) << std::setfill('0') << frame_idx_ << ".jpg";
     cv::imwrite(path.str(), vis);
+}
+
+void Postprocessor::drawDetections(cv::Mat& frame, const std::vector<Detection>& dets) const {
+    for (const auto& det : dets) {
+        cv::rectangle(frame, det.box, cv::Scalar(0, 255, 0), 2);
+
+        std::ostringstream label;
+        label << det.class_id << " " << std::fixed << std::setprecision(2) << det.confidence;
+        cv::putText(
+            frame, label.str(),
+            cv::Point(static_cast<int>(det.box.x), std::max(0, static_cast<int>(det.box.y) - 4)),
+            cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1
+        );
+    }
 }

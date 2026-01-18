@@ -11,6 +11,8 @@ bool Detector::load() {
         net_.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
         net_.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
 
+        output_names_ = net_.getUnconnectedOutLayersNames();
+        loaded_ = true;
         return true;
     } catch (...) {
         return false;
@@ -19,8 +21,13 @@ bool Detector::load() {
 
 std::vector<cv::Mat> Detector::infer(const cv::Mat& blob) {
     std::vector<cv::Mat> outs;
+    if (!loaded_ || net_.empty() || blob.empty()) {
+        return outs;
+    }
     net_.setInput(blob);
-    auto names = net_.getUnconnectedOutLayersNames();
-    net_.forward(outs, names);
+    if (output_names_.empty()) {
+        output_names_ = net_.getUnconnectedOutLayersNames();
+    }
+    net_.forward(outs, output_names_);
     return outs;
 }

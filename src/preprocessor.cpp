@@ -7,14 +7,15 @@ Preprocessor::Preprocessor(int dstSize) : dst_(dstSize) {}
 
 PreprocessResult Preprocessor::run(const cv::Mat& src) const {
     PreprocessResult res;
-    if (src.empty()) return res;
+    if (src.empty() || dst_ <= 0) return res;
 
     const int src_w = src.cols;
     const int src_h = src.rows;
+    if (src_w <= 0 || src_h <= 0) return res;
 
     const float r = std::min((float)dst_ / src_w, (float)dst_ / src_h);
-    const int new_w = (int)std::round(src_w * r);
-    const int new_h = (int)std::round(src_h * r);
+    const int new_w = std::max(1, (int)std::round(src_w * r));
+    const int new_h = std::max(1, (int)std::round(src_h * r));
 
     const int pad_w = dst_ - new_w;
     const int pad_h = dst_ - new_h;
@@ -56,4 +57,3 @@ PreprocessResult Preprocessor::run(const cv::Mat& src) const {
 
     return res;
 }
-

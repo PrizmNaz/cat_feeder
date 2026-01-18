@@ -10,7 +10,14 @@ void Camera::request(int width, int height, double fps) {
 }
 
 bool Camera::open() {
+    if (cap_.isOpened()) {
+        cap_.release();
+    }
+
     cap_.open(index_, cv::CAP_V4L2);
+    if (!cap_.isOpened()) {
+        cap_.open(index_, cv::CAP_ANY);
+    }
     if (!cap_.isOpened()) return false;
 
     cap_.set(cv::CAP_PROP_FRAME_WIDTH,  req_w_);
@@ -21,6 +28,9 @@ bool Camera::open() {
 }
 
 bool Camera::read(cv::Mat& outFrame) {
+    if (!cap_.isOpened()) {
+        return false;
+    }
     return cap_.read(outFrame);
 }
 
