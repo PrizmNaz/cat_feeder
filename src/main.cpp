@@ -1,11 +1,11 @@
 #include <atomic>
 #include <csignal>
 #include <iostream>
-#include <opencv2/opencv.hpp>
 #include <chrono>
 
 #include "camera.h"
 #include "perf.h"
+#include "preprocessor.h"
 
 namespace {
     std::atomic<bool> g_running{true};
@@ -29,6 +29,12 @@ int main() {
     Perf perf;
     cv::Mat frame;
 
+    Preprocessor prep(320, 32);
+
+    bool printed_blob_info = false;
+
+
+
     while (g_running) {
         auto t_total0 = Perf::clock::now();
 
@@ -43,17 +49,24 @@ int main() {
         // --- PREPROCESS (имитация будущего YOLO-пайплайна) ---
         auto t_pre0 = Perf::clock::now();
 
-        // 1) resize до "модельного" размера (например 320x320)
-        cv::Mat resized;
-        cv::resize(frame, resized, cv::Size(320, 320), 0, 0, cv::INTER_LINEAR);
+        PreprocessResult pr = prep.run(frame);
+        
+        if (!printed_blob_info) {
+            const cv::Mat& blob = pr.blob;
+            std::cout << "Blob dims: " << blob.dims << "\n";
+            if (blob.dims == 4) {
+                std::cout << "Blob shape: ["
+                        << blob.size[0] << ", "
+                        << blob.size[1] << ", "
+                        << blob.size[2] << ", "
+                        << blob.size[3] << "]\n";
+            }
+            std::cout << "Blob type: " << blob.type() << " (expect CV_32F)\n";
+            std::cout << "Letterbox: " << pr.letterbox_bgr.cols << "x" << pr.letterbox_bgr.rows
+                    << " | scale=" << pr.scale << " pad_x=" << pr.pad_x << " pad_y=" << pr.pad_y << "\n";
+            printed_blob_info = true;
+        }
 
-        // 2) BGR -> RGB (часто модели ждут RGB)
-        cv::Mat rgb;
-        cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-
-        // 3) небольшая нагрузка (blur), чтобы увидеть влияние
-        cv::Mat blurred;
-        cv::GaussianBlur(rgb, blurred, cv::Size(5, 5), 0);
 
         auto t_pre1 = Perf::clock::now();
 

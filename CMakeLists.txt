@@ -10,6 +10,7 @@ add_executable(cat_feeder
     src/main.cpp
     src/camera.cpp
     src/perf.cpp
+    src/preprocessor.cpp
 )
 
 target_link_libraries(cat_feeder PRIVATE ${OpenCV_LIBS})
