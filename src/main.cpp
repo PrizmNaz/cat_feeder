@@ -6,9 +6,10 @@
 #include <opencv2/opencv.hpp>
 
 #include "camera.h"
-#include "preprocess.h"
+#include "preprocessor.h"
 #include "perf.h"
 #include "detector.h"
+#include "postprocessor.h"
 
 namespace {
     std::atomic<bool> g_running{true};
@@ -30,10 +31,10 @@ int main() {
     std::cout << cam.info() << "\n";
 
     // --- Preprocess (YOLO input size) ---
-    Preprocessor prep(320);        // под твой экспорт (320)
+    Preprocessor prep(320);     
 
     // --- Detector ---
-    Detector det("models/yolo26n.onnx"); // имя файла поправь при необходимости
+    Detector det("models/yolo26n.onnx"); 
     if (!det.load()) {
         std::cerr << "ERROR: cannot load ONNX model\n";
         return 1;
@@ -43,6 +44,14 @@ int main() {
 
     // --- Runtime ---
     Perf perf;
+    PostprocessOptions post_opts;
+    post_opts.num_classes = 26;
+    post_opts.conf_threshold = 0.8f;
+    post_opts.nms_threshold = 0.45f;
+    post_opts.has_objectness = false;
+    Postprocessor post(post_opts);
+    post.setDebug(true, 30, "output");
+
     cv::Mat frame;
 
     while (g_running) {
@@ -73,6 +82,9 @@ int main() {
         double total_ms = std::chrono::duration_cast<std::chrono::microseconds>(t_total1 - t_total0).count() / 1000.0;
 
         perf.onFrame(cap_ms, pre_ms, inf_ms, total_ms);
+
+        std::vector<Detection> dets = post.run(outs, pr, frame.size());
+        post.maybeSaveDebug(frame, dets);
 
         if (perf.shouldReport()) {
             std::cout
