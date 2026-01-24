@@ -6,9 +6,9 @@ import sys
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Export YOLO .pt to ONNX")
-    parser.add_argument("--pt", default="models/yolo26n.pt", help="Path to .pt weights")
+    parser.add_argument("--pt", default="models/best.pt", help="Path to .pt weights")
     parser.add_argument("--out", default="models/yolo26n.onnx", help="Path to output .onnx")
-    parser.add_argument("--imgsz", type=int, default=320, help="Input image size")
+    parser.add_argument("--imgsz", type=int, default=640, help="Input image size")
     parser.add_argument("--opset", type=int, default=12, help="ONNX opset")
     parser.add_argument("--simplify", action="store_true", help="Simplify ONNX graph")
     return parser.parse_args()
@@ -34,6 +34,9 @@ def main():
         imgsz=args.imgsz,
         opset=args.opset,
         simplify=args.simplify,
+        nms=False,
+        dynamic=False,
+        half=False,
     )
 
     # ultralytics writes рядом с .pt по умолчанию, переносим/переименовываем в нужное место

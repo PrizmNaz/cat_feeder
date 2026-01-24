@@ -12,6 +12,11 @@ endif()
 find_package(OpenCV REQUIRED)
 find_package(Threads REQUIRED)
 
+set(ONNXRUNTIME_DIR /opt/onnxruntime)
+
+include_directories(${ONNXRUNTIME_DIR}/include)
+link_directories(${ONNXRUNTIME_DIR}/lib)
+
 add_executable(cat_feeder
   src/main.cpp
   src/camera.cpp
@@ -22,8 +27,8 @@ add_executable(cat_feeder
   src/web_server.cpp
 )
 
-target_link_libraries(cat_feeder PRIVATE ${OpenCV_LIBS} Threads::Threads)
-target_include_directories(cat_feeder PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(cat_feeder PRIVATE onnxruntime ${OpenCV_LIBS} Threads::Threads )
+target_include_directories(cat_feeder PRIVATE ${OpenCV_INCLUDE_DIRS} )
 
 add_executable(preprocess_recorder
   src/preprocess_recorder.cpp

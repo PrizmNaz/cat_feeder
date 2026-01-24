@@ -28,7 +28,7 @@ namespace {
         int width = 640;
         int height = 480;
         double fps = 30.0;
-        int input_size = 320;
+        int input_size = 640;
         std::string model_path = "models/yolo26n.onnx";
         float conf_threshold = 0.25f;
         float nms_threshold = 0.45f;
